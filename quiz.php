@@ -9,8 +9,11 @@
 require_once 'config.php';
 require_once 'VocabularyDatabase.php';
 
+xlog($_REQUEST);
+
 // Get database connection
 $db = getDbConnection();
+require_once 'auth_integration.php';
 
 // Create database handler
 $vocabDB = new VocabularyDatabase($db);
@@ -114,7 +117,7 @@ require_once 'modal_edit.php';
             if (isset($_SESSION['quiz_result'])):
                 include('quiz_result.php');
 			endif;
-            ?>
+			?>
 
 			<?php
 			// Fügen Sie diesen Code in quiz.php ein, nach der Ergebnisanzeige und vor dem Formular für die neue Abfrage
@@ -241,8 +244,7 @@ require_once 'modal_edit.php';
                         </div>
 
                         <!-- Selbstbewertungsbuttons (Daumen hoch/runter) -->
-                        <div class="card mb-4" id="selfEvaluationCard">
-                            <div class="card-body">
+                        <div id="selfEvaluationCard">
                                 <div class="card-title text-center mb-3">Weißt du die Antwort?</div>
 
 
@@ -279,13 +281,12 @@ require_once 'modal_edit.php';
                                         <div class="mt-2">Nein, nicht gewusst</div>
                                     </a>
                                 </div>
-                            </div>
                         </div>
 
                         <div class="mb-4">
                             <label for="user_answer" class="form-label">Oder gib deine Antwort ein:</label>
                             <div class="input-group">
-                                <input type="text" class="form-control form-control-lg" id="user_answer" name="user_answer" autocomplete="off" autofocus>
+                                <input type="text" class="form-control form-control-lg" id="user_answer" name="user_answer" autocomplete="off">
                                 <button type="submit" name="submit_answer" class="btn btn-primary" id="checkAnswerBtn">
                                     <i class="bi bi-check-lg"></i> Prüfen
                                 </button>

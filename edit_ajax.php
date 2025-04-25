@@ -76,12 +76,20 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$wordSource = trim($input['word_source']);
 	$wordTarget = trim($input['word_target']);
 	$exampleSentence = trim($input['example_sentence'] ?? '');
-	$importance = intval($input['importance'] ?? 3);
+	$importance = intval($input['importance'] ?? 2);
 
-	$listId = intval($input['list_id'] ?? 1);
+	$listId = intval($input['list_id'] ?? 0);
+
+
+	// Verify list exists
+	$list = $vocabDB->getListById($listId);
 
 	// Validate input
 	$errors = [];
+
+	if ($list['user_id'] != $_SESSION['user_id']) {
+		$errors[] = 'not allowed';
+	}
 
 	if (empty($wordSource)) {
 		$errors[] = 'Bitte gib das Englisch ein.';
@@ -91,17 +99,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 		$errors[] = 'Bitte gib das Deutsch ein.';
 	}
 
-	if ($importance < 1 || $importance > 5) {
-		$errors[] = 'Die Wichtigkeit muss zwischen 1 und 5 liegen.';
+	if ($importance < 1 || $importance > 3) {
+		$errors[] = 'Die Wichtigkeit muss zwischen 1 und 3 liegen.';
 	}
 
 	// Check if vocabulary with same words already exists (excluding current one)
 	if ($vocabDB->vocabExistsExcept($wordSource, $wordTarget, $id)) {
 		$errors[] = 'Eine Vokabel mit diesen Wörtern existiert bereits.';
 	}
-
-	// Verify list exists
-	$list = $vocabDB->getListById($listId);
 
 	if (!$list) {
 		$listId = 1; // Fallback to default list

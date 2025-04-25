@@ -8,13 +8,14 @@
 // Include configuration
 require_once 'config.php';
 
+// Get database connection
+$db = getDbConnection();
+require_once 'auth_integration.php';
+
 // Initialize variables
 $successCount = 0;
 $errorCount = 0;
 $errorMessages = [];
-
-// Get database connection
-$db = getDbConnection();
 
 // Handle form submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {

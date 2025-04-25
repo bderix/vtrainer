@@ -9,20 +9,23 @@
 require_once 'config.php';
 require_once 'VocabularyDatabase.php';
 
+// Get database connection
+$db = getDbConnection();
+require_once 'auth_integration.php';
+
 // Initialize variables
 $wordSource = '';
 $wordTarget = '';
 $exampleSentence = '';
 $importance = 2;
-$listId = $_SESSION['listId'] ?? 1; // Default list
+$listId = $_GET['list_id'] ?? $_SESSION['listId'] ?? 1; // Default list
 $successMessage = '';
 $errorMessage = '';
-// Get database connection
-$db = getDbConnection();
 $vocabDB = new VocabularyDatabase($db);
 
 // Get all vocabulary lists
 $lists = $vocabDB->getAllLists();
+xlog($lists);
 
 // Get current list details
 $currentList = $vocabDB->getListById($listId);
@@ -231,31 +234,8 @@ require_once 'header.php';
 <script>
 	document.getElementById('word_source').focus();
 
-	// Update importance display when slider changes
-	document.getElementById('importance').addEventListener('input', function() {
-		document.getElementById('importance_display').textContent = this.value;
-
-		// Update badge color based on importance
-		const badge = document.getElementById('importance_display');
-		const value = parseInt(this.value);
-
-		// Remove all existing classes
-		badge.className = 'badge';
-
-		// Add appropriate class based on value
-		if (value === 1) {
-			badge.classList.add('bg-danger');
-		} else if (value === 2) {
-			badge.classList.add('bg-primary');
-		} else if (value === 3) {
-			badge.classList.add('bg-success');
-		}
-	});
-
 	// Trigger the event on page load to set initial color
-	document.addEventListener('DOMContentLoaded', function() {
 		const event = new Event('input');
-		document.getElementById('importance').dispatchEvent(event);
 
 		// Update labels when list selection changes
 		document.getElementById('list_id').addEventListener('change', function() {
@@ -282,7 +262,6 @@ require_once 'header.php';
 			document.getElementById('bulk_source_language').textContent = sourceLanguage;
 			document.getElementById('bulk_target_language').textContent = targetLanguage;
 		});
-	});
 </script>
 
 <?php
@@ -294,5 +273,6 @@ require_once 'modal_delete.php';
 require_once 'footer.php';
 ?>
 
+XXXXXXX
 <!-- Include JavaScript for vocabulary editing functionality -->
 <script src="vocab_edit.js"></script>

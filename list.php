@@ -11,6 +11,8 @@ require_once 'VocabularyDatabase.php';
 
 // Get database connection
 $db = getDbConnection();
+require_once 'auth_integration.php';
+
 $vocabDB = new VocabularyDatabase($db);
 
 // Handle filters
@@ -19,24 +21,43 @@ $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
 $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'date_added';
 $sortOrder = isset($_GET['order']) ? $_GET['order'] : 'DESC';
 
+
 // Get list ID from GET, session, or default to 1 (standard list)
 if (isset($_GET['list_id'])) {
 	$listId = intval($_GET['list_id']);
-	// Save to session
 	$_SESSION['selected_list_id'] = $listId;
 } else if (isset($_SESSION['selected_list_id'])) {
 	$listId = $_SESSION['selected_list_id'];
 } else {
-	$listId = 1; // Default to standard list
-	$_SESSION['selected_list_id'] = $listId;
+	header('Location: lists.php');
 }
 
-// Get all lists for dropdown
-$lists = $vocabDB->getAllLists();
-xlog($lists);
-
-// Get current list details
 $currentList = $vocabDB->getListById($listId);
+xlog($currentList);
+if (empty($currentList)) {
+	unset($_SESSION['selected_list_id']);
+	header('Location: lists.php');
+}
+
+if ($currentList['user_id'] == $_SESSION['user_id']) $ownList = true;
+else $ownList = false;
+
+if ($ownList) {
+	$lists = $vocabDB->getVocabularyListsByUser($_SESSION['user_id']); // alle Listen um die Listen auswaehlen zu koennen
+}
+else {
+	// $tmp = new UserAuthentication($db);
+    $currentListUser = $auth->loadUserById($currentList['user_id']);
+    xlog($currentListUser);
+}
+
+// $currentList = array_filter($lists, function ($item) use ($listId) {
+// 	return $item['id'] === $listId;
+// });
+// $currentList = array_shift($currentList);
+
+
+
 $sourceLanguage = $currentList['source_language'] ?? 'Grundsprache';
 $targetLanguage = $currentList['target_language'] ?? 'Zielsprache';
 
@@ -75,10 +96,15 @@ require_once 'header.php';
 <div class="row mb-4">
     <div class="col-md-12">
         <div class="card card-hover">
-            <div class="card-header bg-primary text-white d-flex justify-content-between align-items-center">
+            <div class="card-header <?=$ownList ? 'bg-primary' : 'bg-success' ?> text-white d-flex justify-content-between align-items-center">
                 <h5 class="card-title mb-0">
+					<?php if ($ownList) : ?>
                     <i class="bi bi-card-list"></i>
                     Vokabelliste: <?= htmlspecialchars($currentList['name']) ?>
+					<?php endif; ?>
+					<?php if (!$ownList) : ?>
+                    <i class="bi bi-globe"></i> Öffentliche Liste <?= htmlspecialchars($currentList['name']) ?>
+					<?php endif; ?>
                 </h5>
                 <div>
                     <a href="add.php" class="btn btn-sm btn-light me-2">
@@ -89,7 +115,9 @@ require_once 'header.php';
                     </button>
                 </div>
             </div>
+
             <div class="card-body">
+                <?php if ($ownList and count($lists) > 1) : ?>
                 <!-- List selection dropdown -->
                 <div class="row mb-3">
                     <div class="col-md-6">
@@ -104,6 +132,7 @@ require_once 'header.php';
                         </select>
                     </div>
                 </div>
+                <?php endif; ?>
 
                 <!-- Filters (collapsible) -->
                 <div class="collapse <?= (!empty($searchTerm) || !empty($importanceFilter)) ? 'show' : '' ?>" id="filterCollapse">
@@ -177,7 +206,10 @@ require_once 'header.php';
                                     Hinzugefügt am <?= getSortIcon('date_added', $sortBy, $sortOrder) ?>
                                 </a>
                             </th>
+
+                            <?php if ($ownList) : ?>
                             <th class="text-center">Aktionen</th>
+                            <?php endif; ?>
                         </tr>
                         </thead>
 
@@ -219,25 +251,32 @@ require_once 'header.php';
 
                                     <td class="text-center">
                                         <div class="d-flex align-items-center justify-content-center">
+											<?php if ($ownList) : ?>
                                             <button type="button" onclick="updateImportance(<?= $vocab['id'] ?>, 'decrease', this)" class="btn btn-sm btn-link p-0 <?= $vocab['importance'] <= 1 ? 'disabled' : '' ?>"
 												<?= $vocab['importance'] <= 1 ? 'aria-disabled="true"' : '' ?> data-vocab-importance-btn="decrease">
                                                 <i class="bi bi-dash-circle"></i>
                                             </button>
+                                            <?php endif; ?>
                                             <span id="importance-badge-<?= $vocab['id'] ?>"
                                                   class="badge rounded-pill bg-<?= Helper::getImportanceBadgeColor($vocab['importance']) ?> mx-2 px-3 py-2"
                                                   data-vocab-importance>
                                                     <?= $vocab['importance'] ?>
                                                 </span>
+											<?php if ($ownList) : ?>
                                             <button type="button" onclick="updateImportance(<?= $vocab['id'] ?>, 'increase', this)" class="btn btn-sm btn-link p-0  <?= $vocab['importance'] >= 5 ? 'disabled' : '' ?>"
 												<?= $vocab['importance'] >= 5 ? 'aria-disabled="true"' : '' ?> data-vocab-importance-btn="increase">
                                                 <i class="bi bi-plus-circle"></i>
                                             </button>
+                                            <?php endif; ?>
                                         </div>
                                     </td>
 
                                     <td class="text-center" data-vocab-date>
 										<?= date('d.m.Y', strtotime($vocab['date_added'])) ?>
                                     </td>
+
+
+									<?php if ($ownList) : ?>
                                     <td class="text-center">
                                         <div class="btn-group btn-group-sm">
                                             <button type="button" class="btn btn-outline-primary" onclick="editVocabulary(<?= $vocab['id'] ?>)">
@@ -275,6 +314,7 @@ require_once 'header.php';
                                             </div>
                                         </div>
                                     </td>
+                                    <?php endif; ?>
                                 </tr>
 							<?php endforeach; ?>
 						<?php else: ?>
@@ -284,7 +324,7 @@ require_once 'header.php';
 									<?php if (!empty($searchTerm) || !empty($importanceFilter)): ?>
                                         <a href="list.php?list_id=<?= $listId ?>" class="btn btn-sm btn-outline-secondary mt-2">Filter zurücksetzen</a>
 									<?php else: ?>
-                                        <a href="add.php" class="btn btn-sm btn-primary mt-2">Erste Vokabel hinzufügen</a>
+                                        <a href="add.php?list_id=<?= $listId ?>" class="btn btn-sm btn-primary mt-2">Erste Vokabel hinzufügen</a>
 									<?php endif; ?>
                                 </td>
                             </tr>
@@ -423,13 +463,3 @@ require_once 'footer.php';
 	}
 
 </script>
-
-
-SELECT
-'INSERT INTO neue_tabelle (' ||GROUP_CONCAT('"'+name+'"', ', ') ||') VALUES (' ||GROUP_CONCAT(
-CASE WHEN type = 'TEXT' THEN '''' || REPLACE(value, '''', '''''') || '''' WHEN type IN ('INTEGER', 'REAL') THEN value ELSE 'NULL' END,
-', ' ) || ');' AS insert_statement
-FROM (
-SELECT name, type, (SELECT value FROM pragma_table_info('vocabulary') WHERE name = t.name) AS value
-FROM ( SELECT * FROM vocabulary ) AS data CROSS JOIN pragma_table_info('vocabulary') AS t
-);

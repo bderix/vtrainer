@@ -9,20 +9,30 @@
 require_once 'config.php';
 require_once 'VocabularyDatabase.php';
 
-xlog($_GET);
-// exit;
 // Get database connection
 $db = getDbConnection();
+require_once 'auth_integration.php';
 
+
+xlog($_GET);
+xlog($_SESSION);
+
+if (isset($_SESSION['errorMessage'])) {
+    echo $_SESSION['errorMessage'];
+    unset($_SESSION['errorMessage']);
+    exit;
+}
+// exit;
 // Create database handler
 $vocabDB = new VocabularyDatabase($db);
 
 // Handle form submissions
 $direction = $_GET['direction'] ?? 'source_to_target';
-$importance = isset($_GET['importance']) ? array_map('intval', (array)$_GET['importance']) : [1, 2, 3, 4, 5];
+$importance = isset($_GET['importance']) ? array_map('intval', (array)$_GET['importance']) : [1, 2, 3];
 $filtered = isset($_GET['filtered']) && $_GET['filtered'] == 1;
 $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
 $recentLimit = $vtrequest->getRecentLimit();
+$_SESSION['quiz_recent_limit'] = $recentLimit;
 
 // Get list ID from GET, session, or default to 1 (standard list)
 if (isset($_GET['list_id'])) {
@@ -31,16 +41,9 @@ if (isset($_GET['list_id'])) {
 	$_SESSION['selected_list_id'] = $listId;
 } else if (isset($_SESSION['selected_list_id'])) {
 	$listId = $_SESSION['selected_list_id'];
-} else {
-	$listId = 1; // Default to standard list
-	$_SESSION['selected_list_id'] = $listId;
 }
 
-// Achten Sie darauf, den $recentLimit-Parameter in der Session zu speichern
-$_SESSION['quiz_recent_limit'] = $recentLimit;
 // Get all vocabulary lists
-$lists = $vocabDB->getAllLists();
-
 // Save quiz parameters in session for self-evaluation redirects
 $_SESSION['quiz_importance'] = $importance;
 $_SESSION['quiz_search'] = $searchTerm;
@@ -53,13 +56,35 @@ unset($_SESSION['quiz_vocab_batch']);
 unset($_SESSION['quiz_session_stats']);
 unset($_SESSION['quiz_session_stats_current']);
 
-// Get current list details and language labels
-$currentList = $vocabDB->getListById($listId);
+// if ($currentList['user_id'] == $_SESSION['user_id']) $ownList = true;
+// else $ownList = false;
+
+$lists = $vocabDB->getVocabularyListsByUser($_SESSION['user_id']); // alle Listen um die Listen auswaehlen zu koennen
+xlog($listId);
+xlog($lists);
+
+if (empty($listId)) {
+	$currentList = $lists[0];
+}
+else {
+	$currentList = array_filter($lists, function ($item) use ($listId) {
+		return $item['id'] === $listId;
+	});
+	$currentList = array_shift($currentList);
+}
+if (empty($currentList)) {
+    $currentList = $lists[0];
+	$_SESSION['selected_list_id'] = $lists[0]['id'];
+}
+xlog($currentList);
+
+
 $sourceLanguage = $currentList['source_language'] ?? 'Quellwort';
 $targetLanguage = $currentList['target_language'] ?? 'Zielwort';
 
 // Get quiz statistics for this setup
-$quizStats = $vocabDB->getQuizStats($direction, $importance, $searchTerm, $listId);
+$quizStats = $vocabDB->getQuizStats($direction, $importance, $searchTerm, $listId, $recentLimit);
+xlog($quizStats);
 
 // Include header
 require_once 'header.php';
@@ -230,7 +255,7 @@ require_once 'header.php';
 			}
 
 			// Für Wichtigkeitsstufen
-			for (let i = 1; i <= 5; i++) {
+			for (let i = 1; i <= 3; i++) {
 				const importanceCard = document.getElementById('importanceCard' + i);
 				const importanceCheck = document.getElementById('importance' + i);
 
@@ -306,9 +331,9 @@ require_once 'header.php';
 
 			const recentLimitInput = document.getElementById('recent_limit');
 			const recentLimit = recentLimitInput ? recentLimitInput.value : 0;
-			if (recentLimit > 0) {
-				queryParams += '&recent_limit=' + recentLimit;
-			}
+			// if (recentLimit > 0) {
+			// 	queryParams += '&recent_limit=' + recentLimit;
+			// }
 
 			// AJAX-Request senden
 			fetch('get_quiz_stats_ajax.php?' + queryParams, {

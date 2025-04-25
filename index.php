@@ -8,8 +8,11 @@
 // Include configuration
 require_once 'config.php';
 
+
 // Get database connection
 $db = getDbConnection();
+
+require_once 'auth_integration.php';
 
 // Get vocabulary count
 $stmt = $db->query('SELECT COUNT(*) FROM vocabulary');

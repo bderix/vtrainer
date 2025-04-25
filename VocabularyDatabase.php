@@ -27,19 +27,42 @@ class VocabularyDatabase {
 	 *
 	 * @return array Array of vocabulary lists
 	 */
-	public function getAllLists() {
+	public function getAllLists($userId = null) {
 		try {
-			$query = "
-                SELECT 
-                    l.id, l.name, l.source_language, l.target_language, l.description,
-                    COUNT(v.id) as vocabulary_count
-                FROM vocabulary_lists l
-                LEFT JOIN vocabulary v ON l.id = v.list_id
-                GROUP BY l.id
-                ORDER BY l.id = 1 DESC, l.name
-            ";
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
 
-			$stmt = $this->db->query($query);
+			$query = "
+            SELECT 
+                l.id, l.name, l.source_language, l.target_language, l.description,
+                l.is_private, l.user_id,
+                COUNT(v.id) as vocabulary_count
+            FROM vocabulary_lists l
+            LEFT JOIN vocabulary v ON l.id = v.list_id
+            WHERE 1=1
+        ";
+
+			$params = [];
+
+			// Filter nach Benutzer, wenn eine ID angegeben
+			if ($userId !== null) {
+				// Zeige eigene Listen und öffentliche Listen anderer Benutzer
+				$query .= " AND (l.user_id = :user_id OR l.is_private = 0)";
+				$params[':user_id'] = $userId;
+			}
+
+			$query .= "GROUP BY l.id ORDER BY l.id = 1 DESC, l.name";
+			xlog($query);
+			$stmt = $this->db->prepare($query);
+
+			// Parameter binden, falls vorhanden
+			foreach ($params as $param => $value) {
+				$stmt->bindValue($param, $value, PDO::PARAM_INT);
+			}
+
+			$stmt->execute();
 			return $stmt->fetchAll(PDO::FETCH_ASSOC);
 		} catch (PDOException $e) {
 			error_log('Database error: ' . $e->getMessage());
@@ -53,20 +76,37 @@ class VocabularyDatabase {
 	 * @param int $id List ID
 	 * @return array|bool List data or false if not found
 	 */
-	public function getListById($id) {
+	public function getListById($id, $userId = null) {
 		try {
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
 			$query = "
-                SELECT 
-                    l.id, l.name, l.source_language, l.target_language, l.description, 
-                    COUNT(v.id) as vocabulary_count
-                FROM vocabulary_lists l
-                LEFT JOIN vocabulary v ON l.id = v.list_id
-                WHERE l.id = :id
-                GROUP BY l.id
-            ";
+            SELECT 
+                l.id, l.name, l.source_language, l.target_language, l.description, 
+                l.is_private, l.user_id,
+                COUNT(v.id) as vocabulary_count
+            FROM vocabulary_lists l
+            LEFT JOIN vocabulary v ON l.id = v.list_id
+            WHERE l.id = :id
+        ";
+
+			// Füge Benutzereinschränkung hinzu, wenn eine ID angegeben
+			if ($userId !== null) {
+				$query .= " AND (l.user_id = :user_id OR l.is_private = 0)";
+			}
+
+			$query .= " GROUP BY l.id";
 
 			$stmt = $this->db->prepare($query);
 			$stmt->bindParam(':id', $id, PDO::PARAM_INT);
+
+			if ($userId !== null) {
+				$stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+			}
+
 			$stmt->execute();
 
 			return $stmt->fetch(PDO::FETCH_ASSOC);
@@ -77,24 +117,100 @@ class VocabularyDatabase {
 	}
 
 	/**
+	 * Abrufen aller Vokabellisten eines bestimmten Benutzers
+	 *
+	 * @param int $userId Benutzer-ID
+	 * @return array Array von Listen
+	 */
+	public function getVocabularyListsByUser($userId) {
+		try {
+			$query = "
+            SELECT 
+                l.id, l.name, l.source_language, l.target_language, l.description,
+                l.is_private, l.user_id,
+                COUNT(v.id) as vocabulary_count
+            FROM vocabulary_lists l
+            LEFT JOIN vocabulary v ON l.id = v.list_id
+            WHERE l.user_id = :user_id
+            GROUP BY l.id
+            ORDER BY l.id = 1 DESC, l.name
+        ";
+
+			$stmt = $this->db->prepare($query);
+			$stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+			$stmt->execute();
+
+			return $stmt->fetchAll(PDO::FETCH_ASSOC);
+		} catch (PDOException $e) {
+			error_log('Database error: ' . $e->getMessage());
+			return [];
+		}
+	}
+
+	/**
+	 * Abrufen öffentlicher Vokabellisten anderer Benutzer
+	 *
+	 * @param int $excludeUserId Benutzer-ID, dessen Listen ausgeschlossen werden sollen
+	 * @return array Array von öffentlichen Listen
+	 */
+	public function getPublicVocabularyLists($excludeUserId) {
+		try {
+			$query = "
+            SELECT 
+                l.id, l.name, l.source_language, l.target_language, l.description,
+                l.is_private, l.user_id, 
+                u.username,
+                COUNT(v.id) as vocabulary_count
+            FROM vocabulary_lists l
+            LEFT JOIN vocabulary v ON l.id = v.list_id
+            LEFT JOIN users u ON l.user_id = u.id
+            WHERE l.is_private = 0 AND l.user_id != :exclude_user_id
+            GROUP BY l.id
+            ORDER BY l.name
+        ";
+
+			$stmt = $this->db->prepare($query);
+			$stmt->bindParam(':exclude_user_id', $excludeUserId, PDO::PARAM_INT);
+			$stmt->execute();
+
+			return $stmt->fetchAll(PDO::FETCH_ASSOC);
+		} catch (PDOException $e) {
+			error_log('Database error: ' . $e->getMessage());
+			return [];
+		}
+	}
+
+	/**
 	 * Create a new vocabulary list
 	 *
 	 * @param string $name List name
 	 * @param string $description List description
 	 * @return int|bool New list ID or false on failure
 	 */
-	public function createList($name, $description = '', $source_language = '', $target_language = '') {
+	public function createList($name, $description = '', $source_language = '', $target_language = '', $userId = null, $isPrivate = true) {
 		try {
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			} else if ($userId === null) {
+				// Fallback: Admin-Benutzer, falls keine Session vorhanden
+				$userId = 1;
+			}
+
+			$isPrivateInt = $isPrivate ? 1 : 0;
+
 			$query = "
-               INSERT INTO vocabulary_lists (name, description, source_language, target_language)
-               VALUES (:name, :description, :source_language, :target_language)
-           ";
+            INSERT INTO vocabulary_lists (name, description, source_language, target_language, user_id, is_private)
+            VALUES (:name, :description, :source_language, :target_language, :user_id, :is_private)
+        ";
 
 			$stmt = $this->db->prepare($query);
 			$stmt->bindParam(':name', $name, PDO::PARAM_STR);
 			$stmt->bindParam(':description', $description, PDO::PARAM_STR);
 			$stmt->bindParam(':source_language', $source_language, PDO::PARAM_STR);
 			$stmt->bindParam(':target_language', $target_language, PDO::PARAM_STR);
+			$stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+			$stmt->bindParam(':is_private', $isPrivateInt, PDO::PARAM_INT);
 			$stmt->execute();
 
 			return $this->db->lastInsertId();
@@ -103,7 +219,6 @@ class VocabularyDatabase {
 			return false;
 		}
 	}
-
 	/**
 	 * Update a vocabulary list
 	 *
@@ -112,16 +227,41 @@ class VocabularyDatabase {
 	 * @param string $description List description
 	 * @return bool Success or failure
 	 */
-	public function updateList($id, $name, $source_language = '', $target_language = '', $description = '') {
+	public function updateList($id, $name, $source_language = '', $target_language = '', $description = '', $isPrivate = null, $userId = null) {
 		try {
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
+			// Prüfe, ob die Liste dem Benutzer gehört oder er Admin ist
+			if ($userId !== null && !$this->isListOwner($id, $userId)) {
+				// Überprüfe, ob der User ein Admin ist
+				$isAdmin = false;
+				if (isset($_SESSION['role_id']) && $_SESSION['role_id'] == 1) {
+					$isAdmin = true;
+				}
+
+				if (!$isAdmin) {
+					error_log('Unauthorized list update attempt: User ' . $userId . ' tried to update list ' . $id);
+					return false;
+				}
+			}
+
 			$query = "
             UPDATE vocabulary_lists 
             SET name = :name, 
                 description = :description,
                 source_language = :source_language,
                 target_language = :target_language
-            WHERE id = :id
         ";
+
+			// Nur is_private aktualisieren, wenn ein Wert angegeben wurde
+			if ($isPrivate !== null) {
+				$query .= ", is_private = :is_private";
+			}
+
+			$query .= " WHERE id = :id";
 
 			$stmt = $this->db->prepare($query);
 			$stmt->bindParam(':id', $id, PDO::PARAM_INT);
@@ -129,6 +269,11 @@ class VocabularyDatabase {
 			$stmt->bindParam(':description', $description, PDO::PARAM_STR);
 			$stmt->bindParam(':source_language', $source_language, PDO::PARAM_STR);
 			$stmt->bindParam(':target_language', $target_language, PDO::PARAM_STR);
+
+			if ($isPrivate !== null) {
+				$isPrivateInt = $isPrivate ? 1 : 0;
+				$stmt->bindParam(':is_private', $isPrivateInt, PDO::PARAM_INT);
+			}
 
 			return $stmt->execute();
 		} catch (PDOException $e) {
@@ -138,22 +283,39 @@ class VocabularyDatabase {
 	}
 
 	/**
-	 * Delete a vocabulary list
-	 *
-	 * @param int $id List ID
-	 * @return bool Success or failure
+	 * Aktualisierte Methode: deleteList()
+	 * Jetzt mit Benutzer-Überprüfung
 	 */
-	public function deleteList($id) {
+	public function deleteList($id, $userId = null) {
 		try {
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
+			// Prüfe, ob die Liste dem Benutzer gehört oder er Admin ist
+			if ($userId !== null && !$this->isListOwner($id, $userId)) {
+				// Überprüfe, ob der User ein Admin ist
+				$isAdmin = false;
+				if (isset($_SESSION['role_id']) && $_SESSION['role_id'] == 1) {
+					$isAdmin = true;
+				}
+
+				if (!$isAdmin) {
+					error_log('Unauthorized list deletion attempt: User ' . $userId . ' tried to delete list ' . $id);
+					return false;
+				}
+			}
+
 			// Start transaction
 			$this->db->beginTransaction();
 
 			// Move all vocabulary in this list to the default list
 			$moveQuery = "
-                UPDATE vocabulary
-                SET list_id = 1
-                WHERE list_id = :id
-            ";
+            UPDATE vocabulary
+            SET list_id = 1
+            WHERE list_id = :id
+        ";
 
 			$moveStmt = $this->db->prepare($moveQuery);
 			$moveStmt->bindParam(':id', $id, PDO::PARAM_INT);
@@ -161,9 +323,9 @@ class VocabularyDatabase {
 
 			// Delete the list
 			$deleteQuery = "
-                DELETE FROM vocabulary_lists
-                WHERE id = :id
-            ";
+            DELETE FROM vocabulary_lists
+            WHERE id = :id
+        ";
 
 			$deleteStmt = $this->db->prepare($deleteQuery);
 			$deleteStmt->bindParam(':id', $id, PDO::PARAM_INT);
@@ -191,22 +353,27 @@ class VocabularyDatabase {
 	 * @param string $sortOrder Sort order (ASC or DESC)
 	 * @return array Array of vocabulary items
 	 */
-	public function getVocabularyByList($listId = 0, $importance = [], $searchTerm = '', $sortBy = 'date_added', $sortOrder = 'DESC') {
+	public function getVocabularyByList($listId = 0, $importance = [], $searchTerm = '', $sortBy = 'date_added', $sortOrder = 'DESC', $userId = null) {
 		try {
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
 			$query = "
-                SELECT 
-                    v.id, 
-                    v.word_source, 
-                    v.word_target, 
-                    v.example_sentence, 
-                    v.importance, 
-                    v.date_added,
-                    v.list_id,
-                    vl.name as list_name
-                FROM vocabulary v
-                LEFT JOIN vocabulary_lists vl ON v.list_id = vl.id
-                WHERE 1=1
-            ";
+            SELECT 
+                v.id, 
+                v.word_source, 
+                v.word_target, 
+                v.example_sentence, 
+                v.importance, 
+                v.date_added,
+                v.list_id,
+                vl.name as list_name
+            FROM vocabulary v
+            LEFT JOIN vocabulary_lists vl ON v.list_id = vl.id
+            WHERE 1=1
+        ";
 
 			$params = [];
 
@@ -214,6 +381,16 @@ class VocabularyDatabase {
 			if ($listId > 0) {
 				$query .= " AND v.list_id = :list_id";
 				$params[':list_id'] = $listId;
+
+				// Wenn Benutzer-ID angegeben, prüfe, ob die Liste öffentlich oder dem Benutzer gehört
+				if ($userId !== null) {
+					$query .= " AND (vl.user_id = :user_id_list OR vl.is_private = 0)";
+					$params[':user_id_list'] = $userId;
+				}
+			} else if ($userId !== null) {
+				// Wenn keine spezifische Liste ausgewählt, zeige alle zugänglichen Vokabeln
+				$query .= " AND (vl.user_id = :user_id OR vl.is_private = 0)";
+				$params[':user_id'] = $userId;
 			}
 
 			// Filter by importance
@@ -230,10 +407,10 @@ class VocabularyDatabase {
 			// Filter by search term
 			if (!empty($searchTerm)) {
 				$query .= " AND (
-                    v.word_source LIKE :search 
-                    OR v.word_target LIKE :search 
-                    OR v.example_sentence LIKE :search
-                )";
+                v.word_source LIKE :search 
+                OR v.word_target LIKE :search 
+                OR v.example_sentence LIKE :search
+            )";
 				$params[':search'] = '%' . $searchTerm . '%';
 			}
 
@@ -309,12 +486,36 @@ class VocabularyDatabase {
 	 * @param int $listId List ID
 	 * @return int|bool New vocabulary ID or false on failure
 	 */
-	public function addVocabulary($wordSource, $wordTarget, $exampleSentence = '', $importance = 3, $listId = 1) {
+	public function addVocabulary($wordSource, $wordTarget, $exampleSentence = '', $importance = 3, $listId = 1, $userId = null) {
 		try {
+			// Wenn keine Benutzer-ID angegeben, aktuelle Session verwenden
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
+			// Prüfe, ob der Benutzer zur angegebenen Liste hinzufügen darf
+			if ($userId !== null && $listId > 1) {
+				$isAdmin = isset($_SESSION['role_id']) && $_SESSION['role_id'] == 1;
+
+				// Prüfe, ob die Liste dem Benutzer gehört
+				$query = "SELECT user_id FROM vocabulary_lists WHERE id = :list_id";
+				$stmt = $this->db->prepare($query);
+				$stmt->bindParam(':list_id', $listId, PDO::PARAM_INT);
+				$stmt->execute();
+
+				$list = $stmt->fetch(PDO::FETCH_ASSOC);
+
+				// Wenn die Liste nicht existiert oder nicht dem Benutzer gehört und kein Admin
+				if (!$list || ($list['user_id'] != $userId && !$isAdmin)) {
+					// Fallback zur Standard-Liste
+					$listId = 1;
+				}
+			}
+
 			$query = "
-                INSERT INTO vocabulary (word_source, word_target, example_sentence, importance, list_id)
-                VALUES (:word_source, :word_target, :example_sentence, :importance, :list_id)
-            ";
+            INSERT INTO vocabulary (word_source, word_target, example_sentence, importance, list_id)
+            VALUES (:word_source, :word_target, :example_sentence, :importance, :list_id)
+        ";
 
 			$stmt = $this->db->prepare($query);
 			$stmt->bindParam(':word_source', $wordSource, PDO::PARAM_STR);
@@ -330,7 +531,6 @@ class VocabularyDatabase {
 			return false;
 		}
 	}
-
 	/**
 	 * Update a vocabulary item
 	 *
@@ -412,8 +612,12 @@ class VocabularyDatabase {
 	 * @param int $batchSize Number of vocabulary items to return (default 5)
 	 * @return array Array of vocabulary items or empty array if none found
 	 */
-	public function getQuizVocabulary($direction, $importance = [], $searchTerm = '', $vocabId = 0, $listId = 0, $recentLimit = 0, $batchSize = 5) {
+	public function getQuizVocabulary($direction, $importance = [], $searchTerm = '', $vocabId = 0, $listId = 0, $recentLimit = 0, $batchSize = 5, $userId = null) {
 		try {
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
 			// If a specific vocabulary ID is requested, just return that one
 			if ($vocabId > 0) {
 				$query = "
@@ -430,11 +634,17 @@ class VocabularyDatabase {
                 WHERE v.id = :vocab_id
             ";
 
+				if ($userId !== null) {
+					$query .= " AND (vl.user_id = :user_id OR vl.is_private = 0)";
+				}
+
+
 				$stmt = $this->db->prepare($query);
 				$stmt->bindParam(':vocab_id', $vocabId, PDO::PARAM_INT);
 				$stmt->execute();
 
 				$result = $stmt->fetch(PDO::FETCH_ASSOC);
+
 				return $result ? [$result] : [];
 			}
 
@@ -467,7 +677,18 @@ class VocabularyDatabase {
 			if ($listId > 0) {
 				$query .= " AND v.list_id = :list_id";
 				$params[':list_id'] = $listId;
+				// Benutzer-Einschränkung für die Liste
+				if ($userId !== null) {
+					$query .= " AND (vl.user_id = :user_id_list OR vl.is_private = 0)";
+					$params[':user_id_list'] = $userId;
+				}
 			}
+			// Wenn keine spezifische Liste, aber ein Benutzer angegeben ist
+			else if ($userId !== null) {
+				$query .= " AND (vl.user_id = :user_id OR vl.is_private = 0)";
+				$params[':user_id'] = $userId;
+			}
+
 
 			// Filter by importance
 			if (!empty($importance)) {
@@ -502,9 +723,6 @@ class VocabularyDatabase {
 				$query .= " ORDER BY attempt_count, failure_rate desc";
 			}
 
-
-			$query .= " LIMIT 20";
-
 			xlog($query);
 
 			$stmt = $this->db->prepare($query);
@@ -519,6 +737,7 @@ class VocabularyDatabase {
 
 			$stmt->execute();
 			$vocabulary = $stmt->fetchAll(PDO::FETCH_ASSOC);
+			xlog($vocabulary);
 
 			// If no vocabulary found, return empty array
 			if (count($vocabulary) === 0) {
@@ -707,12 +926,7 @@ class VocabularyDatabase {
 	public function getQuizStats($direction, $importance = [], $searchTerm = '', $listId = 0, $recentLimit = 0) {
 		try {
 			// Build query to get vocabulary IDs based on filters
-			$vocabQuery = "
-                SELECT v.id
-                FROM vocabulary v
-                WHERE 1=1
-            ";
-
+			$vocabQuery = "SELECT v.id FROM vocabulary v where 1=1 ";
 			$params = [];
 
 			// Filter by list
@@ -747,9 +961,6 @@ class VocabularyDatabase {
 				$vocabQuery .= " ORDER BY v.date_added DESC LIMIT :recent_limit";
 				$params[':recent_limit'] = $recentLimit;
 			}
-			xlog($vocabQuery);
-
-			// Prepare statement with all filter parameters
 			$vocabStmt = $this->db->prepare($vocabQuery);
 
 			foreach ($params as $param => $value) {
@@ -757,19 +968,16 @@ class VocabularyDatabase {
 			}
 
 			$vocabStmt->execute();
+			xlog($vocabStmt->queryString);
 			$vocabularyIds = $vocabStmt->fetchAll(PDO::FETCH_COLUMN);
+			xlog($vocabularyIds);
 
 			// Count total vocabulary items matching the filters
 			$totalCount = count($vocabularyIds);
 
 			// If no vocabulary found, return empty stats
 			if ($totalCount === 0) {
-				return [
-					'total_count' => 0,
-					'attempt_count' => 0,
-					'correct_count' => 0,
-					'success_rate' => 0
-				];
+				return ['total_count' => 0, 'attempt_count' => 0, 'correct_count' => 0, 'success_rate' => 0];
 			}
 
 			// Get quiz stats for the filtered vocabulary items
@@ -795,15 +1003,15 @@ class VocabularyDatabase {
 				$statsQuery .= " AND direction = :direction";
 				$statParams[':direction'] = $direction;
 			}
-
 			$statsStmt = $this->db->prepare($statsQuery);
-
 			foreach ($statParams as $param => $value) {
 				$statsStmt->bindValue($param, $value);
 			}
-
 			$statsStmt->execute();
 			$stats = $statsStmt->fetch(PDO::FETCH_ASSOC);
+			xlog($statsStmt->queryString);
+
+			xlog($stats);
 
 			// Calculate success rate
 			$attemptCount = (int)$stats['attempt_count'];
@@ -873,5 +1081,110 @@ class VocabularyDatabase {
 		$recentlyPracticed = $stmt->fetchAll(PDO::FETCH_ASSOC);
 
 		return $recentlyPracticed;
+	}
+
+	public function isListOwner($listId, $userId = null) {
+		try {
+			if ($userId === null && isset($_SESSION['user_id'])) {
+				$userId = $_SESSION['user_id'];
+			}
+
+			if ($userId === null) {
+				return false;
+			}
+
+			$query = "SELECT user_id FROM vocabulary_lists WHERE id = :list_id";
+			$stmt = $this->db->prepare($query);
+			$stmt->bindParam(':list_id', $listId, PDO::PARAM_INT);
+			$stmt->execute();
+
+			$result = $stmt->fetch(PDO::FETCH_ASSOC);
+			return ($result && $result['user_id'] == $userId);
+		} catch (PDOException $e) {
+			error_log('Database error: ' . $e->getMessage());
+			return false;
+		}
+	}
+
+	/**
+	 * Kopieren einer Vokabelliste für einen Benutzer
+	 *
+	 * @param int $sourceListId Quell-Listen-ID
+	 * @param int $userId Ziel-Benutzer-ID
+	 * @param string $newName Name der neuen Liste
+	 * @param bool $isPrivate Ist die neue Liste privat
+	 * @return int|bool Neue Listen-ID oder false bei Fehler
+	 */
+	public function copyList($sourceListId, $userId, $newName, $isPrivate = true) {
+		try {
+			// Beginne Transaktion
+			$this->db->beginTransaction();
+
+			// Hole Informationen über die Quellliste
+			$query = "
+            SELECT source_language, target_language, description
+            FROM vocabulary_lists
+            WHERE id = :source_list_id
+            AND (user_id = :user_id OR is_private = 0)
+        ";
+
+			$stmt = $this->db->prepare($query);
+			$stmt->bindParam(':source_list_id', $sourceListId, PDO::PARAM_INT);
+			$stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+			$stmt->execute();
+
+			$sourceList = $stmt->fetch(PDO::FETCH_ASSOC);
+
+			if (!$sourceList) {
+				// Liste nicht gefunden oder keine Berechtigung
+				$this->db->rollBack();
+				return false;
+			}
+
+			// Erstelle die neue Liste
+			$isPrivateInt = $isPrivate ? 1 : 0;
+
+			$insertListQuery = "
+            INSERT INTO vocabulary_lists 
+            (name, description, source_language, target_language, user_id, is_private)
+            VALUES 
+            (:name, :description, :source_language, :target_language, :user_id, :is_private)
+        ";
+
+			$stmt = $this->db->prepare($insertListQuery);
+			$stmt->bindParam(':name', $newName, PDO::PARAM_STR);
+			$stmt->bindParam(':description', $sourceList['description'], PDO::PARAM_STR);
+			$stmt->bindParam(':source_language', $sourceList['source_language'], PDO::PARAM_STR);
+			$stmt->bindParam(':target_language', $sourceList['target_language'], PDO::PARAM_STR);
+			$stmt->bindParam(':user_id', $userId, PDO::PARAM_INT);
+			$stmt->bindParam(':is_private', $isPrivateInt, PDO::PARAM_INT);
+			$stmt->execute();
+
+			$newListId = $this->db->lastInsertId();
+
+			// Kopiere die Vokabeln
+			$copyVocabQuery = "
+            INSERT INTO vocabulary 
+            (word_source, word_target, example_sentence, importance, list_id)
+            SELECT word_source, word_target, example_sentence, importance, :new_list_id
+            FROM vocabulary
+            WHERE list_id = :source_list_id
+        ";
+
+			$stmt = $this->db->prepare($copyVocabQuery);
+			$stmt->bindParam(':new_list_id', $newListId, PDO::PARAM_INT);
+			$stmt->bindParam(':source_list_id', $sourceListId, PDO::PARAM_INT);
+			$stmt->execute();
+
+			// Commit Transaktion
+			$this->db->commit();
+
+			return $newListId;
+		} catch (PDOException $e) {
+			// Rollback bei Fehler
+			$this->db->rollBack();
+			error_log('Database error: ' . $e->getMessage());
+			return false;
+		}
 	}
 }

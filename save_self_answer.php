@@ -17,6 +17,9 @@ require_once 'VocabularyDatabase.php';
 // Get database connection
 $db = getDbConnection();
 
+require_once 'auth_integration.php';
+
+
 // Create database handler
 $vocabDB = new VocabularyDatabase($db);
 
@@ -90,5 +93,6 @@ if (isset($_SESSION['quiz_recent_limit']) && $_SESSION['quiz_recent_limit'] > 0)
 	$redirectUrl .= '&recent_limit=' . $_SESSION['quiz_recent_limit'];
 }
 
+xlog($redirectUrl); exit;
 header('Location: ' . $redirectUrl);
 exit;

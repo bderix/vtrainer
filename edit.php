@@ -9,6 +9,11 @@
 require_once 'config.php';
 require_once 'VocabularyDatabase.php';
 
+// Get database connection
+$db = getDbConnection();
+require_once 'auth_integration.php';
+
+
 // Initialize variables
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $wordSource = '';
@@ -19,8 +24,6 @@ $listId = 1; // Default list
 $successMessage = '';
 $errorMessage = '';
 
-// Get database connection
-$db = getDbConnection();
 $vocabDB = new VocabularyDatabase($db);
 
 // Get all vocabulary lists

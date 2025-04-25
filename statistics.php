@@ -12,6 +12,8 @@ require_once 'VocabularyDatabase.php';
 
 // Get database connection
 $db = getDbConnection();
+require_once 'auth_integration.php';
+
 $vocabDB = new VocabularyDatabase($db);
 
 // Get list ID from GET parameter

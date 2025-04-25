@@ -13,6 +13,10 @@ if (session_status() === PHP_SESSION_NONE) {
 // Include configuration
 require_once 'config.php';
 
+// Get database connection
+$db = getDbConnection();
+require_once 'auth_integration.php';
+
 // Get parameters
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 $action = $_GET['action'] ?? '';
@@ -29,9 +33,6 @@ if (!in_array($action, ['increase', 'decrease'])) {
 	header('Location: list.php');
 	exit;
 }
-
-// Get database connection
-$db = getDbConnection();
 
 // Get current importance value
 try {

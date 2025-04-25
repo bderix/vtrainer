@@ -38,6 +38,9 @@ class Helper {
 	}
 
 
+}
 
-
+function escape($str) {
+	if (empty($str)) return '';
+	else return htmlspecialchars(addslashes($str));
 }

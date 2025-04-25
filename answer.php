@@ -12,6 +12,8 @@ require_once 'Helper.php';
 
 // Get database connection
 $db = getDbConnection();
+require_once 'auth_integration.php';
+
 $vocabDB = new VocabularyDatabase($db);
 
 xlog($_REQUEST);

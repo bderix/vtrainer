@@ -13,6 +13,10 @@ if (session_status() === PHP_SESSION_NONE) {
 // Include configuration
 require_once 'config.php';
 
+// Get database connection
+$db = getDbConnection();
+require_once 'auth_integration.php';
+
 // Initialize variables
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
@@ -22,9 +26,6 @@ if ($id <= 0) {
 	header('Location: list.php');
 	exit;
 }
-
-// Get database connection
-$db = getDbConnection();
 
 // Get vocabulary info for confirmation message
 try {
