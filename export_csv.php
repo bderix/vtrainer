@@ -7,15 +7,14 @@
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
-require_once 'Helper.php';
+global $app;
 
-// Get database connection
-$db = getDbConnection();
-$vocabDB = new VocabularyDatabase($db);
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 // Get list ID from GET parameter
-$listId = isset($_GET['list_id']) ? intval($_GET['list_id']) : 0;
+$listId = $app->getListId();
+if (!$listId) $vtrequest->redirect('index');
 
 // Get importance levels if specified
 $importance = isset($_GET['importance']) ? array_map('intval', (array)$_GET['importance']) : [];

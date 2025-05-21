@@ -68,7 +68,7 @@
         }
 
         .card-hover:hover {
-            transform: translateY(-5px);
+            transform: translateY(-1px);
             box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
         }
     </style>
@@ -159,13 +159,6 @@
 </nav>
 
 <div class="container mb-4">
-	<?php if (isset($dbInitialized) && $dbInitialized): ?>
-        <div class="alert alert-success alert-dismissible fade show" role="alert">
-            Datenbank wurde erfolgreich initialisiert!
-            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
-        </div>
-	<?php endif; ?>
-
 	<?php if (!empty($successMessage)): ?>
         <div class="alert alert-success alert-dismissible fade show" role="alert">
 			<?= htmlspecialchars($successMessage) ?>

@@ -7,12 +7,10 @@
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
+global $app;
 
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
-
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 xlog($_GET);
 xlog($_SESSION);
@@ -22,9 +20,6 @@ if (isset($_SESSION['errorMessage'])) {
     unset($_SESSION['errorMessage']);
     exit;
 }
-// exit;
-// Create database handler
-$vocabDB = new VocabularyDatabase($db);
 
 // Handle form submissions
 $direction = $_GET['direction'] ?? 'source_to_target';
@@ -34,14 +29,9 @@ $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
 $recentLimit = $vtrequest->getRecentLimit();
 $_SESSION['quiz_recent_limit'] = $recentLimit;
 
-// Get list ID from GET, session, or default to 1 (standard list)
-if (isset($_GET['list_id'])) {
-	$listId = intval($_GET['list_id']);
-	// Save to session
-	$_SESSION['selected_list_id'] = $listId;
-} else if (isset($_SESSION['selected_list_id'])) {
-	$listId = $_SESSION['selected_list_id'];
-}
+
+$listId = $app->getListId();
+if (empty($listId)) $listId = $app->userListen->getDefaultList()->id;
 
 // Get all vocabulary lists
 // Save quiz parameters in session for self-evaluation redirects
@@ -56,31 +46,17 @@ unset($_SESSION['quiz_vocab_batch']);
 unset($_SESSION['quiz_session_stats']);
 unset($_SESSION['quiz_session_stats_current']);
 
-// if ($currentList['user_id'] == $_SESSION['user_id']) $ownList = true;
+// if ($currentList->user_id'] == $_SESSION['user_id']) $ownList = true;
 // else $ownList = false;
 
-$lists = $vocabDB->getVocabularyListsByUser($_SESSION['user_id']); // alle Listen um die Listen auswaehlen zu koennen
+$lists = $app->userListen->getLists();
 xlog($listId);
 xlog($lists);
 
-if (empty($listId)) {
-	$currentList = $lists[0];
-}
-else {
-	$currentList = array_filter($lists, function ($item) use ($listId) {
-		return $item['id'] === $listId;
-	});
-	$currentList = array_shift($currentList);
-}
-if (empty($currentList)) {
-    $currentList = $lists[0];
-	$_SESSION['selected_list_id'] = $lists[0]['id'];
-}
+$currentList = $app->userListen->getList($listId);
 xlog($currentList);
-
-
-$sourceLanguage = $currentList['source_language'] ?? 'Quellwort';
-$targetLanguage = $currentList['target_language'] ?? 'Zielwort';
+$sourceLanguage = $currentList->sourceLanguage;
+$targetLanguage = $currentList->targetLanguage;
 
 // Get quiz statistics for this setup
 $quizStats = $vocabDB->getQuizStats($direction, $importance, $searchTerm, $listId, $recentLimit);
@@ -95,7 +71,7 @@ require_once 'header.php';
             <div class="card card-hover">
                 <div class="card-header bg-primary text-white">
                     <h5 class="card-title mb-0">
-                        <i class="bi bi-gear"></i> Abfrageeinstellungen für Liste: <?= htmlspecialchars($currentList['name']) ?>
+                        <i class="bi bi-gear"></i> Abfrageeinstellungen für Liste: <?= htmlspecialchars($currentList->name) ?>
                     </h5>
                 </div>
                 <div class="card-body">
@@ -105,11 +81,11 @@ require_once 'header.php';
                             <label class="form-label">Liste auswählen</label>
                             <select class="form-select" id="quizListSelect" onchange="changeList(this.value)">
 								<?php foreach ($lists as $list): ?>
-                                    <option value="<?= $list['id'] ?>" <?= $listId === $list['id'] ? 'selected' : '' ?>
-                                            data-source="<?= htmlspecialchars($list['source_language'] ?? 'Quellwort') ?>"
-                                            data-target="<?= htmlspecialchars($list['target_language'] ?? 'Zielwort') ?>">
-										<?= htmlspecialchars($list['name']) ?>
-										<?php if ($list['id'] == 1): ?>(Standard)<?php endif; ?>
+                                    <option value="<?= $list->id ?>" <?= $listId === $list->id ? 'selected' : '' ?>
+                                            data-source="<?= htmlspecialchars($list->source_language ?? 'Quellwort') ?>"
+                                            data-target="<?= htmlspecialchars($list->target_language ?? 'Zielwort') ?>">
+										<?= htmlspecialchars($list->name) ?>
+										<?php if ($list->id == 1): ?>(Standard)<?php endif; ?>
                                     </option>
 								<?php endforeach; ?>
                             </select>
@@ -134,7 +110,7 @@ require_once 'header.php';
                                         <input class="form-check-input" type="radio" name="direction" id="direction1"
                                                value="source_to_target" <?= $direction === 'source_to_target' ? 'checked' : '' ?>>
                                         <label class="form-check-label" for="direction1" id="directionLabel1">
-                                            <i class="bi bi-arrow-right"></i> <span id="sourceLabel"><?= htmlspecialchars($sourceLanguage) ?></span> → <span id="targetLabel"><?= htmlspecialchars($targetLanguage) ?></span>
+                                            <i class=""></i> <span id="sourceLabel"><?= htmlspecialchars($sourceLanguage) ?></span> → <span id="targetLabel"><?= htmlspecialchars($targetLanguage) ?></span>
                                         </label>
                                     </div>
                                 </div>
@@ -143,7 +119,7 @@ require_once 'header.php';
                                         <input class="form-check-input" type="radio" name="direction" id="direction2"
                                                value="target_to_source" <?= $direction === 'target_to_source' ? 'checked' : '' ?>>
                                         <label class="form-check-label" for="direction2" id="directionLabel2">
-                                            <i class="bi bi-arrow-left"></i> <span id="targetLabel2"><?= htmlspecialchars($targetLanguage) ?></span> → <span id="sourceLabel2"><?= htmlspecialchars($sourceLanguage) ?></span>
+                                            <i class=""></i> <span id="targetLabel2"><?= htmlspecialchars($targetLanguage) ?></span> → <span id="sourceLabel2"><?= htmlspecialchars($sourceLanguage) ?></span>
                                         </label>
                                     </div>
                                 </div>

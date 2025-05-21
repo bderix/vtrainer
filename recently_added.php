@@ -8,19 +8,10 @@
  * PHP version 8.0
  */
 
-// Check if database and vocabDB are already defined
-if (!isset($db) || !isset($vocabDB)) {
-	// Include configuration and database class if not already included
-	require_once 'config.php';
-	require_once 'VocabularyDatabase.php';
-
-	// Get database connection
-	$db = getDbConnection();
-	$vocabDB = new VocabularyDatabase($db);
-}
 
 // Get recently added vocabulary (last 5 entries)
-$recentVocabulary = $vocabDB->getRecentVocabulary(5);
+$recentVocabulary = $app->userListen->getRecentlyAdded();
+xlog($recentVocabulary);
 ?>
 
         <div class="card card-hover">

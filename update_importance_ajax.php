@@ -7,6 +7,11 @@
 
 // Include configuration
 require_once 'config.php';
+global $app;
+
+$db = $app->db;
+$vtrequest = $app->request;
+
 
 // Set JSON content type
 header('Content-Type: application/json');
@@ -32,8 +37,6 @@ if (!in_array($action, ['increase', 'decrease'])) {
 	exit;
 }
 
-// Get database connection
-$db = getDbConnection();
 
 // Get current importance value
 try {

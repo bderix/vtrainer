@@ -5,6 +5,16 @@
  * PHP version 8.0
  */
 
+
+exit;
+
+
+
+
+
+
+
+
 // Include configuration and database class
 require_once 'config.php';
 require_once 'VocabularyDatabase.php';
@@ -44,6 +54,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$exampleSentence = trim($_POST['example_sentence'] ?? '');
 	$importance = intval($_POST['importance'] ?? 3);
 	$listId = intval($_POST['list_id'] ?? 1);
+	$listId = $app->getListId();
 
 	// Validate input
 	$errors = [];

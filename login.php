@@ -7,11 +7,7 @@
 
 // Include configuration and classes
 require_once 'config.php';
-require_once 'UserAuthentication.php';
-
-// Get database connection
-$db = getDbConnection();
-$auth = new UserAuthentication($db);
+global $auth;
 
 // Initialize variables
 $email = '';

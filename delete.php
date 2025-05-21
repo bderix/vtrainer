@@ -5,23 +5,20 @@
  * PHP version 8.0
  */
 
-// Start session if not already started
-if (session_status() === PHP_SESSION_NONE) {
-	session_start();
-}
-
 // Include configuration
 require_once 'config.php';
 
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
+global $app;
+
+$vocabDB = $app->vocabDB;
+$db = $app->db;
+$vtrequest = $app->request;
 
 // Initialize variables
 $id = isset($_GET['id']) ? intval($_GET['id']) : 0;
 
 // Check if ID is valid
-if ($id <= 0) {
+if ($id <= 0 or !$app->userListen->isUserVokabel($id)) {
 	$_SESSION['errorMessage'] = 'Ungültige Vokabel-ID.';
 	header('Location: list.php');
 	exit;

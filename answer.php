@@ -7,14 +7,12 @@
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
+global $app;
+
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
+
 require_once 'Helper.php';
-
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
-
-$vocabDB = new VocabularyDatabase($db);
 
 xlog($_REQUEST);
 // Get parameters

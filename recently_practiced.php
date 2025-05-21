@@ -8,24 +8,9 @@
  * PHP version 8.0
  */
 
-// Check if database is already defined
-if (!isset($db)) {
-	// Include configuration if not already included
-	require_once 'config.php';
-	require_once 'VocabularyDatabase.php';
+$recentlyPracticed = $app->userListen->getRecentlyPracticed();
+xlog($recentlyPracticed);
 
-
-	// Get database connection
-	$db = getDbConnection();
-	$vocabDB = new VocabularyDatabase($db);
-}
-
-$recentlyPracticedEntries = $recentlyPracticedEntries ?? 5;
-// Get recently practiced vocabulary if not already defined
-if (!isset($recentlyPracticed)) {
-	$recentlyPracticed = $vocabDB->getRecentlyPracticed($recentlyPracticedEntries);
-
-}
 ?>
 
 	<div class="card card-hover">

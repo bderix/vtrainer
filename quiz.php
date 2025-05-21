@@ -7,24 +7,18 @@
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
+global $app;
 
-xlog($_REQUEST);
-
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
-
-// Create database handler
-$vocabDB = new VocabularyDatabase($db);
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 // Get quiz parameters from GET or session
-$direction = $_GET['direction'] ?? 'source_to_target';
-$importance = isset($_GET['importance']) ? array_map('intval', (array)$_GET['importance']) : [1, 2, 3];
-$filtered = isset($_GET['filtered']) && $_GET['filtered'] == 1;
-$searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
-$listId = isset($_GET['list_id']) ? intval($_GET['list_id']) : 0;
-$vocabId = isset($_GET['vocab_id']) ? intval($_GET['vocab_id']) : 0;
+$direction = $vtrequest->get('direction', 'source_to_target');
+$importance = $vtrequest->get('importance', array(1,2,3));
+$filtered =  $vtrequest->get('filtered') == 1 ? 1 : 0;
+$searchTerm = $vtrequest->get('search', '');
+$listId = $app->getListId();
+$vocabId = $vtrequest->get('vocab_id', 0);
 $recentLimit = $vtrequest->getRecentLimit();
 
 // Save quiz parameters in session for self-evaluation redirects
@@ -51,7 +45,6 @@ if ($vocabId > 0) {
 	if (empty($_SESSION['quiz_vocab_batch']) || count($_SESSION['quiz_vocab_batch']) === 0) {
 		// Keine Vokabeln im Batch - neue laden
 		$vocabBatch = $vocabDB->getQuizVocabulary($direction, $importance, $searchTerm, 0, $listId, $recentLimit);
-        xlog($vocabBatch);
 		if (!empty($vocabBatch)) $_SESSION['quiz_vocab_batch'] = $vocabBatch;
 	}
 
@@ -77,16 +70,6 @@ if (!$quizVocab) {
 	exit;
 }
 
-// If no vocabulary found, show message and redirect to selection
-if (!$quizVocab) {
-	$_SESSION['errorMessage'] = 'Keine passenden Vokabeln für die Abfrage gefunden.';
-	header('Location: quiz_select.php');
-	exit;
-}
-
-
-
-
 // Include header
 require_once 'header.php';
 
@@ -111,15 +94,12 @@ require_once 'modal_edit.php';
     <div class="row">
         <div class="col-md-8 offset-md-2">
 
-
 			<?php
             xlog($_SESSION);
             if (isset($_SESSION['quiz_result'])):
                 include('quiz_result.php');
 			endif;
-			?>
 
-			<?php
 			// Fügen Sie diesen Code in quiz.php ein, nach der Ergebnisanzeige und vor dem Formular für die neue Abfrage
 
 			// Anzeige der Durchlauf-Statistik, falls vorhanden
@@ -187,7 +167,7 @@ require_once 'modal_edit.php';
 
             <div class="card card-hover">
 
-                <div class="card-header bg-success text-white d-flex justify-content-between align-items-center">
+                <div class="card-header bg-primary uccess text-white d-flex justify-content-between align-items-center">
                     <h5 class="card-title mb-0">
                         <i class="bi bi-question-circle"></i> Vokabelabfrage
                     </h5>
@@ -206,10 +186,6 @@ require_once 'modal_edit.php';
                                 Liste: <?= htmlspecialchars($quizVocab['list_name']) ?>
                             </span>
 						<?php endif; ?>
-
-                        <span class="badge rounded-pill bg-<?= Helper::getImportanceBadgeColor($quizVocab['importance']) ?> fs-6 px-3 py-2">
-                            Wichtigkeit: <?= $quizVocab['importance'] ?>
-                        </span>
 
                         <?php if ($recentLimit > 0): ?>
                                 <span class="badge rounded-pill bg-warning fs-6 px-3 py-2">
@@ -245,21 +221,37 @@ require_once 'modal_edit.php';
 
                         <!-- Selbstbewertungsbuttons (Daumen hoch/runter) -->
                         <div id="selfEvaluationCard">
-                                <div class="card-title text-center mb-3">Weißt du die Antwort?</div>
+                                <div id='knowAnswerText' class="card-title text-center mb-3">Weißt du die Antwort?</div>
 
-
-                                <div class="d-grid mb-3">
-                                    <button type="button" id="revealAnswerBtn" class="btn btn-lg py-3 d-flex flex-column align-items-center justify-content-center text-white reveal-btn"
-                                            style="background: linear-gradient(135deg, #17a2b8, #138496); border: none; border-radius: 12px; width: 100%; transition: all 0.3s ease;">
-                                        <i class="bi bi-eye fs-2 mb-1"></i>
-                                        <span style="font-weight: 600; letter-spacing: 0.5px;">Antwort aufdecken</span>
+                            <div class="d-grid mb-3">
+                                <button type="button" id="revealAnswerBtn" class="btn btn-lg py-3 d-flex position-relative"
+                                        style="background-image: repeating-linear-gradient(45deg, #0d6efd 0px, #0d6efd 10px, #0b5ed7 10px, #0b5ed7 20px);
+                   border: 4px solid rgba(255,255,255,0.3);
+                   border-radius: 12px;
+                   box-shadow: 0 8px 16px rgba(0,0,0,0.15);
+                   transition: transform 0.3s ease, box-shadow 0.3s ease, opacity 0.5s ease;
+                   overflow: hidden;
+                   height: 150px;">
+                                    <div class="position-absolute top-0 start-0 w-100 h-100"
+                                         style="background: radial-gradient(circle at 20% 20%, rgba(255,255,255,0.9) 2px, transparent 2px),
+                     radial-gradient(circle at 80% 40%, rgba(255,255,255,0.9) 2px, transparent 2px),
+                     radial-gradient(circle at 40% 60%, rgba(255,255,255,0.9) 2px, transparent 2px),
+                     radial-gradient(circle at 70% 80%, rgba(255,255,255,0.9) 2px, transparent 2px);
+                    background-size: 100px 100px;
+                    opacity: 0.15;">
+                                    </div>
+                                    <div class="d-flex flex-column align-items-center justify-content-center w-100 z-index-1">
+                                        <i class="bi bi-eye fs-1 mb-1 text-white" style="text-shadow: 1px 1px 2px rgba(0,0,0,0.3);"></i>
+                                        <span class="text-white text-uppercase fw-bold" style="letter-spacing: 1px; text-shadow: 1px 1px 2px rgba(0,0,0,0.3);">Antwort aufdecken</span>
                                         <small class="mt-1 text-white-50">Klicken um die Lösung zu sehen</small>
-                                    </button>
-                                </div>
+                                    </div>
+                                </button>
+                            </div>
 
-                                <div id="answerRevealArea" class="text-center my-3 p-3 border rounded bg-light d-none">
-                                    <h6>Die richtige Antwort lautet:</h6>
-                                    <h3 class="text-primary">
+
+                            <div id="answerRevealArea" class="text-center my-3 p-3 border rounded bg-light d-none">
+                                    <h6 class="text-primary">Die richtige Antwort lautet:</h6>
+                                    <h3 class="text-primaxry">
 										<?= ($direction === 'source_to_target') ? htmlspecialchars($quizVocab['word_target']) : htmlspecialchars($quizVocab['word_source']) ?>
                                     </h3>
                                     <div class="mt-3">
@@ -294,9 +286,6 @@ require_once 'modal_edit.php';
                         </div>
 
                         <div class="d-flex justify-content-between">
-                            <a href="quiz_select.php" class="btn btn-outline-secondary" id="settingsBtn">
-                                <i class="bi bi-gear"></i> Einstellungen
-                            </a>
                             <button type="button" id="skipButton" class="btn btn-outline-warning"
                                     data-bs-toggle="modal" data-bs-target="#skipModal">
                                 <i class="bi bi-skip-forward"></i> Überspringen
@@ -371,6 +360,17 @@ require_once 'modal_edit.php';
 			const revealAnswerBtn = document.getElementById('revealAnswerBtn');
 			if (revealAnswerBtn) {
 				revealAnswerBtn.addEventListener('click', function() {
+					// Animation zum Ausblenden des Buttons
+					this.style.opacity = '0';
+
+					// Nach der Animation den Button vollständig aus dem DOM entfernen
+					setTimeout(() => {
+						this.parentNode.remove();
+						document.getElementById('knowAnswerText').remove();
+						// Oder alternativ nur den Button ausblenden:
+						// this.style.display = 'none';
+					}, 200); // Zeit in ms, sollte mit der Transition-Dauer übereinstimmen
+
 					// Zeige die Antwort
 					document.getElementById('answerRevealArea').classList.remove('d-none');
 					// Zeige die Selbstevaluierungsbuttons
@@ -378,7 +378,7 @@ require_once 'modal_edit.php';
 					// Deaktiviere den Aufdecken-Button
 					this.disabled = true;
 					this.classList.add('disabled');
-					this.innerHTML = '<i class="bi bi-eye-fill fs-2"></i><div class="mt-2">Antwort aufgedeckt</div>';
+					// this.innerHTML = '<i class="bi bi-eye-fill fs-2"></i><div class="mt-2">Antwort aufgedeckt</div>';
 				});
 			}
 

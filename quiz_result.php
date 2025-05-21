@@ -9,7 +9,7 @@
 				<?php endif; ?>
 
 				<?php if (isset($_SESSION['quiz_result']['self_evaluated']) && $_SESSION['quiz_result']['self_evaluated']): ?>
-					<span class="badge bg-secondary float-end">
+					<span class="badge bg-outline-secondary float-end">
                         <i class="bi bi-hand-thumbs-<?= $_SESSION['quiz_result']['is_correct'] ? 'up' : 'down' ?>"></i>
                         Selbstbewertung
                     </span>

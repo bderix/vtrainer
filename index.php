@@ -10,11 +10,8 @@ require_once 'config.php';
 
 
 // Get database connection
-$db = getDbConnection();
+$db = $app->db;
 
-require_once 'auth_integration.php';
-
-// Get vocabulary count
 $stmt = $db->query('SELECT COUNT(*) FROM vocabulary');
 $vocabCount = $stmt->fetchColumn();
 
@@ -69,14 +66,14 @@ require_once 'header.php';
 
 <!-- Include vocabulary lists row -->
 <div class="row mt-4">
-    <div class="col-md-6 mb-4">
+    <div class="col-md-12 mb-4">
     <!-- Include recently added vocabulary section -->
 	<?php include 'recently_added.php'; ?>
     </div>
 
     <div class="col-md-6 mb-4">
     <!-- Include recently practiced vocabulary section -->
-	<?php include 'recently_practiced.php'; ?>
+	<?php //include 'recently_practiced.php'; ?>
     </div>
 </div>
 

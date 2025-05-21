@@ -7,39 +7,44 @@
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
+global $app;
 
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
+$db = $app->db;
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 // Initialize variables
 $wordSource = '';
 $wordTarget = '';
 $exampleSentence = '';
 $importance = 2;
-$listId = $_GET['list_id'] ?? $_SESSION['listId'] ?? 1; // Default list
+
 $successMessage = '';
 $errorMessage = '';
-$vocabDB = new VocabularyDatabase($db);
 
 // Get all vocabulary lists
-$lists = $vocabDB->getAllLists();
-xlog($lists);
+$userLists = $app->userListen->getLists();
+xlog($userLists);
 
+$listId = $vtrequest->getListId();
+if (empty($listId)) $listId =  $app->userListen->getDefaultList()->id;
+xlog($listId);
 // Get current list details
-$currentList = $vocabDB->getListById($listId);
-$sourceLanguage = $currentList['source_language'] ?? 'Quellwort';
-$targetLanguage = $currentList['target_language'] ?? 'Zielwort';
+$currentList = $app->userListen->getList($listId);
+xlog($currentList);
+$sourceLanguage = $currentList->sourceLanguage;
+$targetLanguage = $currentList->targetLanguage;
 
 // Handle form submission
-if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+if ($vtrequest->isPostRequest()) {
 	// Get form data
-	$wordSource = trim($_POST['word_source'] ?? '');
-	$wordTarget = trim($_POST['word_target'] ?? '');
-	$exampleSentence = trim($_POST['example_sentence'] ?? '');
-	$importance = intval($_POST['importance'] ?? 3);
-	$listId = intval($_POST['list_id'] ?? $listId);
+	$wordSource = $vtrequest->post('word_source', '');
+	$wordTarget = $vtrequest->post('word_target', '');
+	$exampleSentence = $vtrequest->post('example_sentence', '');
+	$importance = $vtrequest->post('importance', '');
+	$listId = $vtrequest->post('list_id');
+    if (empty($listId)) $vtrequest->redirect('add');
+    if (!$app->userListen->isUserList($listId)) $vtrequest->redirect('index');
 
 	// Validate input
 	$errors = [];
@@ -127,12 +132,12 @@ require_once 'header.php';
                     <div class="mb-3">
                         <label for="list_id" class="form-label">Liste <span class="text-danger">*</span></label>
                         <select class="form-select" id="list_id" name="list_id" required>
-							<?php foreach ($lists as $list): ?>
-                                <option value="<?= $list['id'] ?>" <?= $list['id'] == $listId ? 'selected' : '' ?>
-                                        data-source="<?= htmlspecialchars($list['source_language'] ?? 'Quellwort') ?>"
-                                        data-target="<?= htmlspecialchars($list['target_language'] ?? 'Zielwort') ?>">
-									<?= htmlspecialchars($list['name']) ?>
-									<?php if ($list['id'] == 1): ?>(Standard)<?php endif; ?>
+							<?php foreach ($userLists as $list): ?>
+                                <option value="<?= $list->id ?>" <?= $list->id == $listId ? 'selected' : '' ?>
+                                        data-source="<?= htmlspecialchars($list->source_language ?? 'Quellwort') ?>"
+                                        data-target="<?= htmlspecialchars($list->target_language ?? 'Zielwort') ?>">
+									<?= htmlspecialchars($list->name) ?>
+									<?php if ($list->id == 1): ?>(Standard)<?php endif; ?>
                                 </option>
 							<?php endforeach; ?>
                         </select>
@@ -207,12 +212,12 @@ require_once 'header.php';
                     <div class="mb-3">
                         <label for="list_id_multiple" class="form-label">Liste auswählen</label>
                         <select class="form-select" id="list_id_multiple" name="list_id_multiple">
-							<?php foreach ($lists as $list): ?>
-                                <option value="<?= $list['id'] ?>" <?= $list['id'] == $listId ? 'selected' : '' ?>
-                                        data-source="<?= htmlspecialchars($list['source_language'] ?? 'Quellwort') ?>"
-                                        data-target="<?= htmlspecialchars($list['target_language'] ?? 'Zielwort') ?>">
-									<?= htmlspecialchars($list['name']) ?>
-									<?php if ($list['id'] == 1): ?>(Standard)<?php endif; ?>
+							<?php foreach ($userLists->getLists() as $list): ?>
+                                <option value="<?= $list->id ?>" <?= $list->id == $listId ? 'selected' : '' ?>
+                                        data-source="<?= htmlspecialchars($list->source_language ?? 'Quellwort') ?>"
+                                        data-target="<?= htmlspecialchars($list->target_language ?? 'Zielwort') ?>">
+									<?= htmlspecialchars($list->name) ?>
+									<?php if ($list->id == 1): ?>(Standard)<?php endif; ?>
                                 </option>
 							<?php endforeach; ?>
                         </select>
@@ -273,6 +278,5 @@ require_once 'modal_delete.php';
 require_once 'footer.php';
 ?>
 
-XXXXXXX
 <!-- Include JavaScript for vocabulary editing functionality -->
 <script src="vocab_edit.js"></script>

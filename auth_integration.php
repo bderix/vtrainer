@@ -17,7 +17,7 @@ if (session_status() === PHP_SESSION_NONE) {
 require_once 'UserAuthentication.php';
 
 // Datenbankverbindung und Authentifizierungsobjekt erstellen
-$auth = new UserAuthentication($db);
+$auth = new UserAuthentication($app->db);
 
 // Liste von Seiten, die keine Authentifizierung erfordern
 $publicPages = [
@@ -30,12 +30,12 @@ $publicPages = [
 
 // Aktuelle Seite ermitteln
 $currentPage = basename($_SERVER['SCRIPT_NAME']);
-
+xlog($currentPage);
 // Prüfen, ob dies eine Seite ist, die keine Authentifizierung für den Zugriff erfordert
 $isPublicPage = in_array($currentPage, $publicPages);
-
+xlog($isPublicPage);
 // Sicherheitsüberprüfung: Ist der Benutzer auf einer geschützten Seite angemeldet?
-if (!$isPublicPage && !$auth->isLoggedIn() && !isset($noSessionCheck)) {
+if (!$isPublicPage and !$auth->isLoggedIn() && !isset($noSessionCheck)) {
 	// Aktuelle URL für Weiterleitung nach Login speichern
 	$_SESSION['intended_url'] = $_SERVER['REQUEST_URI'];
 
@@ -54,7 +54,7 @@ if ($currentPage === 'admin.php' && !$auth->isAdmin()) {
 // Wenn wir hier sind, hat der Benutzer Zugriff auf die Seite
 
 // Globale Variablen für die Verwendung in Templates
-$currentUser = $auth->getCurrentUser();
+if ($auth->isLoggedIn()) $app->initUser($auth->getCurrentUser());
 $isAdmin = $auth->isAdmin();
 $isPremium = $auth->isPremium();
 

@@ -7,7 +7,10 @@
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
+global $app;
+
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 // Set JSON content type
 header('Content-Type: application/json');
@@ -17,10 +20,6 @@ header('Content-Type: application/json');
 // 	echo json_encode(['success' => false, 'message' => 'Nur AJAX-Anfragen sind erlaubt.']);
 	// exit;
 // }
-
-// Get database connection
-$db = getDbConnection();
-$vocabDB = new VocabularyDatabase($db);
 
 // Handle GET request to fetch vocabulary data
 if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['id'])) {
@@ -43,16 +42,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['id'])) {
 
 	// Get all vocabulary lists
 	$lists = $vocabDB->getAllLists();
+	xlog($lists);
 	foreach ($lists as $list) {
-		if ($list['id'] == $listId) {
+		if ($list->id == $listId) {
 			$currentList = $list;
 			break;
 		}
 	}
 	xlog($list);
 
-	$vocab['source_language'] = $currentList['source_language'];
-	$vocab['target_language'] = $currentList['target_language'];
+	$vocab['source_language'] = $currentList->sourceLanguage;
+	$vocab['target_language'] = $currentList->targetLanguage;
 
 	// Include lists in the response
 	$vocab['lists'] = $lists;
@@ -66,6 +66,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'GET' && isset($_GET['id'])) {
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	// Decode JSON input
 	$input = json_decode(file_get_contents('php://input'), true);
+	xlog($input);
 
 	if (!$input || !isset($input['id']) || !isset($input['word_source']) || !isset($input['word_target'])) {
 		echo json_encode(['success' => false, 'message' => 'Fehlende Eingabedaten.']);
@@ -78,16 +79,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 	$exampleSentence = trim($input['example_sentence'] ?? '');
 	$importance = intval($input['importance'] ?? 2);
 
-	$listId = intval($input['list_id'] ?? 0);
+	// $listId = intval($input['list_id'] ?? 0);
+	$listId = $app->getListId($input);
 
 
 	// Verify list exists
 	$list = $vocabDB->getListById($listId);
+	xlog($list);
 
 	// Validate input
 	$errors = [];
 
-	if ($list['user_id'] != $_SESSION['user_id']) {
+	if ($list->userId != $_SESSION['user_id']) {
 		$errors[] = 'not allowed';
 	}
 
@@ -105,13 +108,15 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 
 	// Check if vocabulary with same words already exists (excluding current one)
 	if ($vocabDB->vocabExistsExcept($wordSource, $wordTarget, $id)) {
-		$errors[] = 'Eine Vokabel mit diesen Wörtern existiert bereits.';
+		// $errors[] = 'Eine Vokabel mit diesen Wörtern existiert bereits.';
 	}
 
 	if (!$list) {
 		$listId = 1; // Fallback to default list
 		 $errors[] = 'Liste nicht vorhanden';
 	}
+
+	xlog($errors);
 
 	if (!empty($errors)) {
 		echo json_encode(['success' => false, 'message' => implode(' ', $errors)]);

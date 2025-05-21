@@ -12,16 +12,6 @@ if (session_status() === PHP_SESSION_NONE) {
 
 // Include configuration and database class
 require_once 'config.php';
-require_once 'VocabularyDatabase.php';
-
-// Get database connection
-$db = getDbConnection();
-
-require_once 'auth_integration.php';
-
-
-// Create database handler
-$vocabDB = new VocabularyDatabase($db);
 
 // Get parameters
 $vocabId = isset($_GET['vocab_id']) ? intval($_GET['vocab_id']) : 0;

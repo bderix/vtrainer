@@ -8,29 +8,26 @@
 // Include header
 require_once 'config.php';
 require_once 'Helper.php';
-require_once 'VocabularyDatabase.php';
 
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
+global $app;
 
-$vocabDB = new VocabularyDatabase($db);
+$db = $app->db;
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 // Get list ID from GET parameter
-$listId = isset($_GET['list_id']) ? intval($_GET['list_id']) : 0;
+$listId = $app->getListId();
 
 // Get all vocabulary lists
-$lists = $vocabDB->getAllLists();
+$lists = $app->userListen->getLists();
+xlog($lists);
 
 // Get selected list name (for display)
 $selectedListName = "Alle Listen";
 if ($listId > 0) {
 	foreach ($lists as $list) {
-		if ($list['id'] == $listId) {
-			$selectedListName = $list['name'];
-			if ($list['id'] == 1) {
-				$selectedListName .= " (Standard)";
-			}
+		if ($list->id == $listId) {
+			$selectedListName = $list->name;
 			break;
 		}
 	}
@@ -219,9 +216,9 @@ include_once 'header.php';
                             <select class="form-select" id="list_id" name="list_id">
                                 <option value="0" <?= $listId === 0 ? 'selected' : '' ?>>Alle Listen</option>
 								<?php foreach ($lists as $list): ?>
-                                    <option value="<?= $list['id'] ?>" <?= $listId === $list['id'] ? 'selected' : '' ?>>
-										<?= htmlspecialchars($list['name']) ?>
-										<?php if ($list['id'] == 1): ?>(Standard)<?php endif; ?>
+                                    <option value="<?= $list->id ?>" <?= $listId === $list->id ? 'selected' : '' ?>>
+										<?= htmlspecialchars($list->name) ?>
+										<?php if ($list->id == 1): ?>(Standard)<?php endif; ?>
                                     </option>
 								<?php endforeach; ?>
                             </select>

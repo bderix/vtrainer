@@ -9,11 +9,8 @@
 require_once 'config.php';
 require_once 'VocabularyDatabase.php';
 
-// Get database connection
-$db = getDbConnection();
-require_once 'auth_integration.php';
-
-$vocabDB = new VocabularyDatabase($db);
+$vocabDB = $app->vocabDB;
+$vtrequest = $app->request;
 
 // Handle filters
 $importanceFilter = isset($_GET['importance']) ? array_map('intval', (array)$_GET['importance']) : [];
@@ -21,25 +18,19 @@ $searchTerm = isset($_GET['search']) ? trim($_GET['search']) : '';
 $sortBy = isset($_GET['sort']) ? $_GET['sort'] : 'date_added';
 $sortOrder = isset($_GET['order']) ? $_GET['order'] : 'DESC';
 
-
-// Get list ID from GET, session, or default to 1 (standard list)
-if (isset($_GET['list_id'])) {
-	$listId = intval($_GET['list_id']);
-	$_SESSION['selected_list_id'] = $listId;
-} else if (isset($_SESSION['selected_list_id'])) {
-	$listId = $_SESSION['selected_list_id'];
-} else {
-	header('Location: lists.php');
-}
+xlog($_SESSION);
+$listId = $app->getListId();
+if (empty($listId)) $vtrequest->redirect('lists');
 
 $currentList = $vocabDB->getListById($listId);
 xlog($currentList);
+
 if (empty($currentList)) {
-	unset($_SESSION['selected_list_id']);
-	header('Location: lists.php');
+	$vtrequest->delSessionValue('selected_list_id');
+	$vtrequest->redirect('lists');
 }
 
-if ($currentList['user_id'] == $_SESSION['user_id']) $ownList = true;
+if ($currentList->userId == $_SESSION['user_id']) $ownList = true;
 else $ownList = false;
 
 if ($ownList) {
@@ -47,7 +38,7 @@ if ($ownList) {
 }
 else {
 	// $tmp = new UserAuthentication($db);
-    $currentListUser = $auth->loadUserById($currentList['user_id']);
+    $currentListUser = $auth->loadUserById($currentList->userId);
     xlog($currentListUser);
 }
 
@@ -55,11 +46,7 @@ else {
 // 	return $item['id'] === $listId;
 // });
 // $currentList = array_shift($currentList);
-
-
-
-$sourceLanguage = $currentList['source_language'] ?? 'Grundsprache';
-$targetLanguage = $currentList['target_language'] ?? 'Zielsprache';
+;
 
 // Get filtered vocabulary list
 $vocabulary = $vocabDB->getVocabularyByList($listId, $importanceFilter, $searchTerm, $sortBy, $sortOrder);
@@ -100,10 +87,10 @@ require_once 'header.php';
                 <h5 class="card-title mb-0">
 					<?php if ($ownList) : ?>
                     <i class="bi bi-card-list"></i>
-                    Vokabelliste: <?= htmlspecialchars($currentList['name']) ?>
+                    Vokabelliste: <?= htmlspecialchars($currentList->name) ?>
 					<?php endif; ?>
 					<?php if (!$ownList) : ?>
-                    <i class="bi bi-globe"></i> Öffentliche Liste <?= htmlspecialchars($currentList['name']) ?>
+                    <i class="bi bi-globe"></i> Öffentliche Liste <?= htmlspecialchars($currentList->name) ?>
 					<?php endif; ?>
                 </h5>
                 <div>
@@ -124,9 +111,9 @@ require_once 'header.php';
                         <label for="list_selector" class="form-label">Liste auswählen:</label>
                         <select class="form-select" id="list_selector" onchange="changeList(this.value)">
 							<?php foreach ($lists as $list): ?>
-                                <option value="<?= $list['id'] ?>" <?= $listId === $list['id'] ? 'selected' : '' ?>>
-									<?= htmlspecialchars($list['name']) ?>
-									<?php if ($list['id'] == 1): ?>(Standard)<?php endif; ?>
+                                <option value="<?= $list->id ?>" <?= $listId === $list->id ? 'selected' : '' ?>>
+									<?= htmlspecialchars($list->name) ?>
+									<?php if ($list->id == 1): ?>(Standard)<?php endif; ?>
                                 </option>
 							<?php endforeach; ?>
                         </select>
@@ -148,11 +135,9 @@ require_once 'header.php';
                             </div>
                             <div class="col-md-4">
                                 <select class="form-select" name="importance[]" multiple>
-                                    <option value="1" <?= in_array(1, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 1 (Niedrig)</option>
+                                    <option value="1" <?= in_array(1, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 1</option>
                                     <option value="2" <?= in_array(2, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 2</option>
-                                    <option value="3" <?= in_array(3, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 3 (Mittel)</option>
-                                    <option value="4" <?= in_array(4, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 4</option>
-                                    <option value="5" <?= in_array(5, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 5 (Hoch)</option>
+                                    <option value="3" <?= in_array(3, $importanceFilter) ? 'selected' : '' ?>>Wichtigkeit 3</option>
                                 </select>
                             </div>
                             <div class="col-md-12">
@@ -177,12 +162,12 @@ require_once 'header.php';
                         <tr>
                             <th>
                                 <a href="<?= getSortUrl('word_source', $sortBy, $sortOrder) ?>" class="text-decoration-none">
-									<?= htmlspecialchars($sourceLanguage) ?> <?= getSortIcon('word_source', $sortBy, $sortOrder) ?>
+									<?= htmlspecialchars($currentList->sourceLanguage) ?> <?= getSortIcon('word_source', $sortBy, $sortOrder) ?>
                                 </a>
                             </th>
                             <th>
                                 <a href="<?= getSortUrl('word_target', $sortBy, $sortOrder) ?>" class="text-decoration-none">
-									<?= htmlspecialchars($targetLanguage) ?> <?= getSortIcon('word_target', $sortBy, $sortOrder) ?>
+									<?= htmlspecialchars($currentList->targetLanguage) ?> <?= getSortIcon('word_target', $sortBy, $sortOrder) ?>
                                 </a>
                             </th>
                             <th>Notiz</th>
@@ -217,14 +202,14 @@ require_once 'header.php';
 						<?php if ($totalCount > 0): ?>
 							<?php foreach ($vocabulary as $vocab) :
                                 xlog($vocab);
-								$stats = $vocabDB->getVocabularyQuizStats($vocab['id']);
+								$stats = $vocabDB->getVocabularyQuizStats($vocab->id);
                             ?>
-                                <tr class="importance-<?= $vocab['importance'] ?>" data-vocab-id="<?= $vocab['id'] ?>">
-                                    <td data-vocab-source><?= htmlspecialchars($vocab['word_source']) ?></td>
-                                    <td data-vocab-target><?= htmlspecialchars($vocab['word_target']) ?></td>
+                                <tr class="importance-<?= $vocab->importance ?>" data-vocab-id="<?= $vocab->id ?>">
+                                    <td data-vocab-source><?= htmlspecialchars($vocab->wordSource) ?></td>
+                                    <td data-vocab-target><?= htmlspecialchars($vocab->wordTarget) ?></td>
                                     <td data-vocab-example class="fst-italic text-muted">
-										<?php if (!empty($vocab['example_sentence'])): ?>
-											<?= htmlspecialchars($vocab['example_sentence']) ?>
+										<?php if (!empty($vocab->example_sentence)): ?>
+											<?= htmlspecialchars($vocab->example_sentence) ?>
 										<?php else: ?>
                                             <span class="text-muted fst-italic"></span>
 										<?php endif; ?>
@@ -252,19 +237,19 @@ require_once 'header.php';
                                     <td class="text-center">
                                         <div class="d-flex align-items-center justify-content-center">
 											<?php if ($ownList) : ?>
-                                            <button type="button" onclick="updateImportance(<?= $vocab['id'] ?>, 'decrease', this)" class="btn btn-sm btn-link p-0 <?= $vocab['importance'] <= 1 ? 'disabled' : '' ?>"
-												<?= $vocab['importance'] <= 1 ? 'aria-disabled="true"' : '' ?> data-vocab-importance-btn="decrease">
+                                            <button type="button" onclick="updateImportance(<?= $vocab->id ?>, 'decrease', this)" class="btn btn-sm btn-link p-0 <?= $vocab->importance <= 1 ? 'disabled' : '' ?>"
+												<?= $vocab->importance <= 1 ? 'aria-disabled="true"' : '' ?> data-vocab-importance-btn="decrease">
                                                 <i class="bi bi-dash-circle"></i>
                                             </button>
                                             <?php endif; ?>
-                                            <span id="importance-badge-<?= $vocab['id'] ?>"
-                                                  class="badge rounded-pill bg-<?= Helper::getImportanceBadgeColor($vocab['importance']) ?> mx-2 px-3 py-2"
+                                            <span id="importance-badge-<?= $vocab->id ?>"
+                                                  class="badge rounded-pill bg-<?= Helper::getImportanceBadgeColor($vocab->importance) ?> mx-2 px-3 py-2"
                                                   data-vocab-importance>
-                                                    <?= $vocab['importance'] ?>
+                                                    <?= $vocab->importance ?>
                                                 </span>
 											<?php if ($ownList) : ?>
-                                            <button type="button" onclick="updateImportance(<?= $vocab['id'] ?>, 'increase', this)" class="btn btn-sm btn-link p-0  <?= $vocab['importance'] >= 5 ? 'disabled' : '' ?>"
-												<?= $vocab['importance'] >= 5 ? 'aria-disabled="true"' : '' ?> data-vocab-importance-btn="increase">
+                                            <button type="button" onclick="updateImportance(<?= $vocab->id ?>, 'increase', this)" class="btn btn-sm btn-link p-0  <?= $vocab->importance >= 5 ? 'disabled' : '' ?>"
+												<?= $vocab->importance >= 5 ? 'aria-disabled="true"' : '' ?> data-vocab-importance-btn="increase">
                                                 <i class="bi bi-plus-circle"></i>
                                             </button>
                                             <?php endif; ?>
@@ -272,48 +257,30 @@ require_once 'header.php';
                                     </td>
 
                                     <td class="text-center" data-vocab-date>
-										<?= date('d.m.Y', strtotime($vocab['date_added'])) ?>
+										<?= date('d.m.Y', strtotime($vocab->dateAdded)) ?>
                                     </td>
 
 
 									<?php if ($ownList) : ?>
-                                    <td class="text-center">
-                                        <div class="btn-group btn-group-sm">
-                                            <button type="button" class="btn btn-outline-primary" onclick="editVocabulary(<?= $vocab['id'] ?>)">
-                                                <i class="bi bi-pencil"></i>
-                                            </button>
-                                            <a href="quiz.php?vocab_id=<?= $vocab['id'] ?>" class="btn btn-outline-success">
-                                                <i class="bi bi-question-circle"></i>
-                                            </a>
-                                            <button type="button" class="btn btn-outline-danger"
-                                                    data-bs-toggle="modal" data-bs-target="#deleteModal<?= $vocab['id'] ?>">
-                                                <i class="bi bi-trash"></i>
-                                            </button>
-                                        </div>
-
-                                        <!-- Delete Modal -->
-                                        <div class="modal fade" id="deleteModal<?= $vocab['id'] ?>" tabindex="-1"
-                                             aria-labelledby="deleteModalLabel<?= $vocab['id'] ?>" aria-hidden="true">
-                                            <div class="modal-dialog">
-                                                <div class="modal-content">
-                                                    <div class="modal-header">
-                                                        <h5 class="modal-title" id="deleteModalLabel<?= $vocab['id'] ?>">
-                                                            Vokabel löschen
-                                                        </h5>
-                                                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                                                    </div>
-                                                    <div class="modal-body">
-                                                        Möchtest du die Vokabel <strong><?= htmlspecialchars($vocab['word_source']) ?> -
-															<?= htmlspecialchars($vocab['word_target']) ?></strong> wirklich löschen?
-                                                    </div>
-                                                    <div class="modal-footer">
-                                                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Abbrechen</button>
-                                                        <a href="delete.php?id=<?= $vocab['id'] ?>" class="btn btn-danger">Löschen</a>
-                                                    </div>
-                                                </div>
+                                        <td class="text-center">
+                                            <div class="btn-group btn-group-sm">
+                                                <button type="button" class="btn btn-outline-primary" onclick="editVocabulary(<?= $vocab->id ?>)">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <a href="quiz.php?vocab_id=<?= $vocab->id ?>" class="btn btn-outline-success">
+                                                    <i class="bi bi-question-circle"></i>
+                                                </a>
+                                                <button type="button" class="btn btn-outline-danger delete-vocab-btn"
+                                                        data-bs-toggle="modal"
+                                                        data-bs-target="#confirmDeleteModal"
+                                                        data-vocab-id="<?= $vocab->id ?>"
+                                                        data-vocab-source="<?= htmlspecialchars($vocab->wordSource, ENT_QUOTES, 'UTF-8') ?>"
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
                                             </div>
-                                        </div>
-                                    </td>
+                                            <!-- Das spezifische Modal wurde hier entfernt -->
+                                        </td>
+
                                     <?php endif; ?>
                                 </tr>
 							<?php endforeach; ?>
@@ -347,6 +314,7 @@ require_once 'header.php';
         </div>
     </div>
 </div>
+
 
 <?php
 // Include modals and footer
